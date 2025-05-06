@@ -10,14 +10,6 @@ project(
 
 include(GNUInstallDirs)
 
-message(STATUS "Standalone tool build configuration:
-        CMake current source directory:     ${CMAKE_CURRENT_SOURCE_DIR}
-        CMake source directory:             ${CMAKE_SOURCE_DIR}
-        Project source directory:           ${PROJECT_SOURCE_DIR}
-        CMake current binary directory:     ${CMAKE_CURRENT_BINARY_DIR}
-        CMake binary directory:             ${CMAKE_BINARY_DIR}
-        Project binary directory:           ${PROJECT_BINARY_DIR}")
-
 # Point this to whatever LLVM instance you want to use
 set(CMAKE_C_COMPILER clang)
 set(CMAKE_CXX_COMPILER clang++)
@@ -25,7 +17,7 @@ add_link_options("-fuse-ld=lld")
 
 # Set the C and C++ standards
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_EXTENSIONS ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -43,17 +35,17 @@ target_link_options(example PRIVATE "-flto" "-fPIC")
 target_compile_options(example PRIVATE "-Wall" "-Wextra")
 target_link_options(example PRIVATE "-Wall" "-Wextra")
 
-# If SVF was built without opaque pointers, don't build the example with it either
-if(NOT SVF_ENABLE_OPAQUE_POINTERS)
-    target_compile_options(example PRIVATE "-Xclang" "-no-opaque-pointers")
-    target_link_options(
-        example
-        PRIVATE
-        "-Xclang"
-        "-no-opaque-pointers"
-        "-Wl,-mllvm=-opaque-pointers=0"
-        "-Wl,-plugin-opt=no-opaque-pointers")
-endif()
+# # If SVF was built without opaque pointers, don't build the example with it either
+# if(NOT SVF_ENABLE_OPAQUE_POINTERS)
+#     target_compile_options(example PRIVATE "-Xclang" "-no-opaque-pointers")
+#     target_link_options(
+#         example
+#         PRIVATE
+#         "-Xclang"
+#         "-no-opaque-pointers"
+#         "-Wl,-mllvm=-opaque-pointers=0"
+#         "-Wl,-plugin-opt=no-opaque-pointers")
+# endif()
 
 # Add some nice debugging options for nicer output
 target_compile_options(
@@ -108,8 +100,31 @@ add_custom_target(example_ir ALL DEPENDS "${EXAMPLE_LLVM_IR_FILE}")
 install(TARGETS example RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES ${EXAMPLE_LLVM_IR_FILE} DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
+find_package(LLVM REQUIRED CONFIG)
+message(STATUS "LLVM STATUS:
+  Version       ${LLVM_VERSION}
+  Includes      ${LLVM_INCLUDE_DIRS}
+  Libraries     ${LLVM_LIBRARY_DIRS}
+  Build type    ${LLVM_BUILD_TYPE}
+  Dynamic lib   ${LLVM_LINK_LLVM_DYLIB}
+  Enable excptions ${LLVM_ENABLE_EH}"
+)
+llvm_map_components_to_libnames(llvm_libs bitwriter core ipo irreader instcombine instrumentation target linker analysis scalaropts support )
+
 # Find the SVF package (see notes in README.md)
-find_package(SVF CONFIG REQUIRED)
+find_package(SVF REQUIRED CONFIG HINTS "$ENV{SVF_DIR}/install" NO_DEFAULT_PATH)
+message(STATUS "SVF STATUS:
+    Found:                              ${SVF_FOUND}
+    Version:                            ${SVF_VERSION}
+    C++ standard:                       ${SVF_CXX_STANDARD}
+    RTTI enabled:                       ${SVF_ENABLE_RTTI}
+    Exceptions enabled:                 ${SVF_ENABLE_EXCEPTIONS}
+    Install root directory:             ${SVF_INSTALL_ROOT}
+    Install binary directory:           ${SVF_INSTALL_BIN_DIR}
+    Install library directory:          ${SVF_INSTALL_LIB_DIR}
+    Install include directory:          ${SVF_INSTALL_INCLUDE_DIR}
+    Install 'extapi.bc' file path:      ${SVF_INSTALL_EXTAPI_FILE}"
+)
 
 # Define the tool itself
 add_executable(SvfTool)
@@ -133,6 +148,8 @@ target_link_options(
     "-Wextra")
 
 # Link the SVF libraries; note that this also links the required LLVM libraries through transitive dependencies
-target_link_libraries(SvfTool PRIVATE SVF::SvfCore SVF::SvfLLVM)
+target_link_libraries(SvfTool PRIVATE SvfCore SvfLLVM ${llvm_libs})
+target_include_directories(SvfTool PRIVATE ${SVF_INSTALL_INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
+target_link_directories(SvfTool PRIVATE ${SVF_INSTALL_LIB_DIR} ${LLVM_LIBRARY_DIRS})
 
-install(TARGETS SvfTool RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+#install(TARGETS SvfTool RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

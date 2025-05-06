@@ -29,6 +29,9 @@
               ninja
               z3
               gllvm
+              zlib
+              ncurses
+              gcc
             ]
             ++ (with pkgs.llvmPackages_13; [
               llvm
@@ -40,6 +43,8 @@
           shellHook = ''
             export LLVM_DIR=${pkgs.llvmPackages_13.llvm.dev}/lib/cmake/llvm
             export LLVM_CONFIG_BINARY=${pkgs.llvmPackages_13.llvm.dev}/bin/llvm-config
+            export TTT_DIR=${pkgs.gcc.out}/lib64
+            export LD_LIBRARY_PATH=${pkgs.zlib.out}/lib:${pkgs.ncurses.out}/lib:"${pkgs.stdenv.cc.cc.lib}/lib":$LD_LIBRARY_PATH
           '';
         };
     });
